@@ -34,7 +34,7 @@ network = os.path.join(networkgdb, "Routing", "Routing_ND")
 travel_mode="Walking Distance"
 
 
-def getClosestLineFromServiceArea(maxdist, facilities, datesuffix):
+def getClosestLineFromServiceArea(maxdist, facilities):
     """ Extracts the closest (Euclidian) road segment from a service area around participant"""
     ## Create Service Area for analysis
     sa_distm = int(maxdist*1.5)  # use 1.5 times overall route distance (400m auditseg = 600m service area)
@@ -93,7 +93,7 @@ def getClosestLineFromServiceArea(maxdist, facilities, datesuffix):
     arcpy.management.RemoveJoin(lines_sublayer)
     # Export the lines for further analysis
     print("Copying Service Area Lines to new feature class...")
-    out_lines = "SAWDlines_googleaudit{}_{}m".format(datesuffix, sa_distm)
+    out_lines = "SAWDlines_googleaudit_{}m".format(sa_distm)
     arcpy.management.CopyFeatures(lines_sublayer, out_lines)
     # Dissolve and Unsplit the lines so that there are intersection-to-intersection road segments,
     # Especially near the participant (would have been split at their location)
@@ -182,14 +182,14 @@ def getClosestLineFromServiceArea(maxdist, facilities, datesuffix):
     return outfc #pass back the name of the segment output
 
 
-def getRouteToClosestDestination(businesscsv, incidents_cf, datesuffix, fcprefix):
+def getRouteToClosestDestination(businesscsv, incidents_cf, fcprefix):
     """Create routes to closest business (e.g. supermarket)"""
     businesslyr = "business_lyr"
     xfield_sma =  "adr_gis_xwgs84_x_2015" #WGS84
     yfield_sma = "adr_gis_ywgs84_x_2015" #WGS84
     print("Creating feature class from businesses")
     arcpy.MakeXYEventLayer_management(businesscsv, xfield_sma, yfield_sma, businesslyr, sr)
-    businessfcnameWGS84 = fcprefix + "_" + datesuffix + "_WGS84"
+    businessfcnameWGS84 = fcprefix + "_WGS84"
     try:
         arcpy.CopyFeatures_management(businesslyr, businessfcnameWGS84)
         print(arcpy.GetMessages())
@@ -230,7 +230,7 @@ def getRouteToClosestDestination(businesscsv, incidents_cf, datesuffix, fcprefix
     routes_layer_name_cf = sublayer_names_cf["CFRoutes"]
     # Export the route lines for further analysis
     print("Copying Routes to feature class")
-    out_cfroutes = "Closest{}_googleaudit{}".format(fcprefix, datesuffix)
+    out_cfroutes = "Closest{}_googleaudit".format(fcprefix)
     arcpy.management.CopyFeatures(routes_layer_name_cf, out_cfroutes)
     # Add field to output routes
     print("Adding kmzid to routes")
@@ -435,7 +435,7 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
     # Use a larger service area than the maximum distance to ensure as much of the
     # individual's street segment is covered as possible.
     # There will be some segments which are too long and need to be cut down.
-    segmentfc = getClosestLineFromServiceArea(maxdistance, gcfcnameWGS84, date_suf)
+    segmentfc = getClosestLineFromServiceArea(maxdistance, gcfcnameWGS84)
     gcCEC = "_".join(gcfcnameWGS84.split("_")[:-1] + ["cec"]) #TODO maybe just pass this name back from the function
     arcpy.MakeFeatureLayer_management(gcCEC, "geocodes_lyr")
     serviceareaCEC = "SAWDlines_googleaudit{}_{}m_dslv_cec".format(date_suf, int(maxdistance*1.5)) #TODO maybe just pass this name back from the function
@@ -657,7 +657,7 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
 
     # Get route from participant to supermarket
     featureClassPrefix = "".join(os.path.basename(nets_csv).split("_")[:3]) #NETS_Supermarkets_yr2014
-    routefc = getRouteToClosestDestination(nets_csv, "geocode_lyr", date_suf,
+    routefc = getRouteToClosestDestination(nets_csv, "geocode_lyr",
                                            featureClassPrefix)
     # copy routefc to new fc before modifying route
     routelimit_dist = maxdistance + 40
@@ -1330,17 +1330,32 @@ if __name__ == "__main__":
     output_semiFinal = "GoogleAuditSegRoutes_NearFinal_{}".format(sum(fcsprocessed))
     arcpy.Merge_management(completed_audit_route_fcs, output_semiFinal)
 
-#TODO incorporate into overall process
-##############################################
-### MIDPOINT INDICATORS FOR SIDE OF STREET ###
-##############################################
-# https://gis.stackexchange.com/questions/189902/determining-whether-point-is-on-left-or-right-side-of-road-using-arcpy
-createSideOfStreetIndicators(geocodesCEC, participant_segments)
+    #TODO incorporate into overall process
+    ##############################################
+    ### MIDPOINT INDICATORS FOR SIDE OF STREET ###
+    ##############################################
+    # https://gis.stackexchange.com/questions/189902/determining-whether-point-is-on-left-or-right-side-of-road-using-arcpy
+    createSideOfStreetIndicators(geocodesCEC, participant_segments)
+    # Check extension back in
+    arcpy.CheckInExtension("network")
 
 
+    # Potential user inputs:
+    # maximum distance for route
+    #    -- e.g. 400m = 400
+    # network dataset with underlying streets
+    #    -- e.g. StreetMap Premium xxxx Release x
+    # desired travel mode on the network dataset
+    #    -- defined on the network dataset, e.g. "Walking Distance"
+    # destinations for route (CSV)
+    #    -- e.g. supermarkets
+    #    -- May need to specify spatial reference for these too
+    # point data (CSV) for participants
+    # spatial reference for original point data
+    #    -- e.g. WGS84
+    # spatial reference used for standardized audit route length measure
+    #    -- e.g. US Contiguous Equidistant Conic
 
-# Check extension back in
-arcpy.CheckInExtension("network")
 
 
 # def getfieldnames(fc):
