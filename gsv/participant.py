@@ -5,14 +5,13 @@ import arcpy
 
 class Participant:
 	def __init__(self, gccsv, sr, xfield="x", yfield="y"):
-    	# gccsvfolder = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\original_data"
-    	# gccsv = os.path.join(gccsvfolder, gccsv_file)
-    	srshortname = "" #TODO get the shortname from the spatial reference
-    	self.gclayername = "googleauditGC_lyr"
-    	arcpy.MakeXYEventLayer_management(gccsv, xfield, yfield,
-    		                              self.gclayername, sr)
-    	self.gcfcname = "GoogleAuditGeocodes_{}".format(srshortname)
-		arcpy.CopyFeatures_management(gclayername, gcfcname)
+		# gccsvfolder = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\original_data"
+		# gccsv = os.path.join(gccsvfolder, gccsv_file)
+		srshortname = "" #TODO get the shortname from the spatial reference
+		self.gclayername = "googleauditGC_lyr"
+		arcpy.MakeXYEventLayer_management(gccsv, xfield, yfield, self.gclayername, sr)
+		self.gcfcname = "GoogleAuditGeocodes_{}".format(srshortname)
+		arcpy.CopyFeatures_management(self.gclayername, self.gcfcname)
 		self.kmzid = "kmzid"
 
 	def getClosestLineFromServiceArea(self, maxdist):

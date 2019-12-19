@@ -254,7 +254,7 @@ def createSideOfStreetIndicators(geocodes, roads):
     print("Need to manually update indicator for 'ShortLoops'")
     return
 
-def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\NETS_Supermarkets_yr2014_REGARDSBSE_2019.04.04_v1_SM.csv", gccsv_file="googleAuditLatLong_REGARDSBSE_2019.06.26.csv"):
+def main(date_suf, gccsv_file, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\NETS_Supermarkets_yr2014_REGARDSBSE_2019.04.04_v1_SM.csv"):
     """ Overall Process -- input the desired date suffix, distance, and point csv datasources (destinations, origins) """
     # Create working gdb
     output_dir = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\intermediate-output"
@@ -281,7 +281,7 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
     #    print(arcpy.GetMessages())
     #except arcpy.ExecuteError as e:
     #    print(e)
-    participants = Participant(r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\original_data", sr)
+    participants = Participant(gccsv_file, sr, "POINT_X", "POINT_Y")
     # set up list for IDs that will require some manual intervention
     adjustAuditRouteManually = list()
     ######################
@@ -292,7 +292,7 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
     # Use a larger service area than the maximum distance to ensure as much of the
     # individual's street segment is covered as possible.
     # There will be some segments which are too long and need to be cut down.
-    segmentfc = getClosestLineFromServiceArea(maxdistance)
+    segmentfc = participants.getClosestLineFromServiceArea(maxdistance)
     gcCEC = "_".join(gcfcnameWGS84.split("_")[:-1] + ["cec"]) #TODO maybe just pass this name back from the function
     arcpy.MakeFeatureLayer_management(gcCEC, "geocodes_lyr")
     serviceareaCEC = "SAWDlines_googleaudit{}_{}m_dslv_cec".format(date_suf, int(maxdistance*1.5)) #TODO maybe just pass this name back from the function
@@ -1064,32 +1064,25 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
     print("Then create segment midpoint indicators, segment start/endpoint indicators, and side of street indicator.")
     return segmentfc_copy, segroutestomerge, adjustAuditRouteManually, gcCEC
 
-dateprocessed = "20190628"
-participant_segments, completed_audit_route_fcs, idsForManualFixes, geocodesCEC = main(dateprocessed)
-fcsprocessed = [int(arcpy.GetCount_management(fc).getOutput(0)) for fc in completed_audit_route_fcs]
-output_semiFinal = "GoogleAuditSegRoutes_NearFinal_{}".format(sum(fcsprocessed))
-arcpy.Merge_management(completed_audit_route_fcs, output_semiFinal)
+# dateprocessed = "20190628"
+# participant_segments, completed_audit_route_fcs, idsForManualFixes, geocodesCEC = main(dateprocessed)
+# fcsprocessed = [int(arcpy.GetCount_management(fc).getOutput(0)) for fc in completed_audit_route_fcs]
+# output_semiFinal = "GoogleAuditSegRoutes_NearFinal_{}".format(sum(fcsprocessed))
+# arcpy.Merge_management(completed_audit_route_fcs, output_semiFinal)
 
 #TODO incorporate into overall process
 ##############################################
 ### MIDPOINT INDICATORS FOR SIDE OF STREET ###
 ##############################################
 # https://gis.stackexchange.com/questions/189902/determining-whether-point-is-on-left-or-right-side-of-road-using-arcpy
-createSideOfStreetIndicators(geocodesCEC, participant_segments)
+#createSideOfStreetIndicators(geocodesCEC, participant_segments)
 
 
 if __name__ == "__main__":
-    dateprocessed = "20190628"
-    main(dateprocessed)
+    dateprocessed = "20191219"
+    participant_segments, completed_audit_route_fcs, idsForManualFixes, geocodesCEC = main(dateprocessed, gccsv_file=r"M:\EPL-GEO_BSERE\NewYBTransfers\fakeGCforGEACodeTest_20191219.csv")
+    print(completed_audit_route_fcs)
 
 
 # Check extension back in
 arcpy.CheckInExtension("network")
-
-
-
-
-
-
-
-
