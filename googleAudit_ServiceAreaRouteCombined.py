@@ -34,7 +34,7 @@ network = os.path.join(networkgdb, "Routing", "Routing_ND")
 travel_mode="Walking Distance"
 
 
-def getClosestLineFromServiceArea(maxdist, facilities, datesuffix):
+def getClosestLineFromServiceArea(maxdist, facilities):
     """ Extracts the closest (Euclidian) road segment from a service area around participant"""
     ## Create Service Area for analysis
     sa_distm = int(maxdist*1.5)  # use 1.5 times overall route distance (400m auditseg = 600m service area)
@@ -93,7 +93,7 @@ def getClosestLineFromServiceArea(maxdist, facilities, datesuffix):
     arcpy.management.RemoveJoin(lines_sublayer)
     # Export the lines for further analysis
     print("Copying Service Area Lines to new feature class...")
-    out_lines = "SAWDlines_googleaudit{}_{}m".format(datesuffix, sa_distm)
+    out_lines = "SAWDlines_googleaudit_{}m".format(sa_distm)
     arcpy.management.CopyFeatures(lines_sublayer, out_lines)
     # Dissolve and Unsplit the lines so that there are intersection-to-intersection road segments,
     # Especially near the participant (would have been split at their location)
@@ -182,14 +182,14 @@ def getClosestLineFromServiceArea(maxdist, facilities, datesuffix):
     return outfc #pass back the name of the segment output
 
 
-def getRouteToClosestDestination(businesscsv, incidents_cf, datesuffix, fcprefix):
+def getRouteToClosestDestination(businesscsv, incidents_cf, fcprefix):
     """Create routes to closest business (e.g. supermarket)"""
     businesslyr = "business_lyr"
     xfield_sma =  "adr_gis_xwgs84_x_2015" #WGS84
     yfield_sma = "adr_gis_ywgs84_x_2015" #WGS84
     print("Creating feature class from businesses")
     arcpy.MakeXYEventLayer_management(businesscsv, xfield_sma, yfield_sma, businesslyr, sr)
-    businessfcnameWGS84 = fcprefix + "_" + datesuffix + "_WGS84"
+    businessfcnameWGS84 = fcprefix + "_WGS84"
     try:
         arcpy.CopyFeatures_management(businesslyr, businessfcnameWGS84)
         print(arcpy.GetMessages())
@@ -230,7 +230,7 @@ def getRouteToClosestDestination(businesscsv, incidents_cf, datesuffix, fcprefix
     routes_layer_name_cf = sublayer_names_cf["CFRoutes"]
     # Export the route lines for further analysis
     print("Copying Routes to feature class")
-    out_cfroutes = "Closest{}_googleaudit{}".format(fcprefix, datesuffix)
+    out_cfroutes = "Closest{}_googleaudit".format(fcprefix)
     arcpy.management.CopyFeatures(routes_layer_name_cf, out_cfroutes)
     # Add field to output routes
     print("Adding kmzid to routes")
@@ -435,7 +435,7 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
     # Use a larger service area than the maximum distance to ensure as much of the
     # individual's street segment is covered as possible.
     # There will be some segments which are too long and need to be cut down.
-    segmentfc = getClosestLineFromServiceArea(maxdistance, gcfcnameWGS84, date_suf)
+    segmentfc = getClosestLineFromServiceArea(maxdistance, gcfcnameWGS84)
     gcCEC = "_".join(gcfcnameWGS84.split("_")[:-1] + ["cec"]) #TODO maybe just pass this name back from the function
     arcpy.MakeFeatureLayer_management(gcCEC, "geocodes_lyr")
     serviceareaCEC = "SAWDlines_googleaudit{}_{}m_dslv_cec".format(date_suf, int(maxdistance*1.5)) #TODO maybe just pass this name back from the function
@@ -657,7 +657,7 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
 
     # Get route from participant to supermarket
     featureClassPrefix = "".join(os.path.basename(nets_csv).split("_")[:3]) #NETS_Supermarkets_yr2014
-    routefc = getRouteToClosestDestination(nets_csv, "geocode_lyr", date_suf,
+    routefc = getRouteToClosestDestination(nets_csv, "geocode_lyr",
                                            featureClassPrefix)
     # copy routefc to new fc before modifying route
     routelimit_dist = maxdistance + 40
@@ -1207,18 +1207,7 @@ def main(date_suf, maxdistance=400, nets_csv = r"M:\EPL-GEO_BSERE\Data\WorkingDa
     print("Then create segment midpoint indicators, segment start/endpoint indicators, and side of street indicator.")
     return segmentfc_copy, segroutestomerge, adjustAuditRouteManually, gcCEC
 
-dateprocessed = "20190628"
-participant_segments, completed_audit_route_fcs, idsForManualFixes, geocodesCEC = main(dateprocessed)
-fcsprocessed = [int(arcpy.GetCount_management(fc).getOutput(0)) for fc in completed_audit_route_fcs]
-output_semiFinal = "GoogleAuditSegRoutes_NearFinal_{}".format(sum(fcsprocessed))
-arcpy.Merge_management(completed_audit_route_fcs, output_semiFinal)
-
-#TODO incorporate into overall process
-##############################################
-### MIDPOINT INDICATORS FOR SIDE OF STREET ###
-##############################################
-# https://gis.stackexchange.com/questions/189902/determining-whether-point-is-on-left-or-right-side-of-road-using-arcpy
-createSideOfStreetIndicators(geocodesCEC, participant_segments)
+# dateprocessed = "20190628"
 
 
 ##################################
@@ -1274,206 +1263,233 @@ createSideOfStreetIndicators(geocodesCEC, participant_segments)
 # # Ask for feedback
 
 
->>> with arcpy.da.SearchCursor("GoogleAuditSegRoutes_Final_2825", ["SHAPE@", "kmzid"]) as routecursor:
-...     for row in routecursor:
-...         k = row[1]
-...         distancedict[k] = {}
-...         routefeat = row[0]
-...         with arcpy.da.SearchCursor("Segment_Endpoints", ["SHAPE@", "kmzid", "OBJECTID"], "{} = '{}'".format(arcpy.AddFieldDelimiters("Segment_Endpoints", "kmzid"), k)) as segcursor:
-...             for srow in segcursor:
-...                 objid = srow[2]
-...                 print(k, objid)
-...                 segfeat = srow[0]
-...                 meas = routefeat.measureOnLine(segfeat)
-...                 distancedict[k][objid] = meas
+# >>> with arcpy.da.SearchCursor("GoogleAuditSegRoutes_Final_2825", ["SHAPE@", "kmzid"]) as routecursor:
+# ...     for row in routecursor:
+# ...         k = row[1]
+# ...         distancedict[k] = {}
+# ...         routefeat = row[0]
+# ...         with arcpy.da.SearchCursor("Segment_Endpoints", ["SHAPE@", "kmzid", "OBJECTID"], "{} = '{}'".format(arcpy.AddFieldDelimiters("Segment_Endpoints", "kmzid"), k)) as segcursor:
+# ...             for srow in segcursor:
+# ...                 objid = srow[2]
+# ...                 print(k, objid)
+# ...                 segfeat = srow[0]
+# ...                 meas = routefeat.measureOnLine(segfeat)
+# ...                 distancedict[k][objid] = meas
 
 
-pointdict = {}
->>> for k in distancedict.keys():
-...     min_key = min(distancedict[k], key=distancedict[k].get)
-...     pointdict[min_key] = 1
-...     max_key = max(distancedict[k],key=distancedict[k].get)
-...     pointdict[max_key] = 2
-...
->>> len(pointdict)
+# pointdict = {}
+# >>> for k in distancedict.keys():
+# ...     min_key = min(distancedict[k], key=distancedict[k].get)
+# ...     pointdict[min_key] = 1
+# ...     max_key = max(distancedict[k],key=distancedict[k].get)
+# ...     pointdict[max_key] = 2
+# ...
+# >>> len(pointdict)
 
 
->>> pointdictmax = {}
->>> for k in distancedict.keys():
-...     max_key = max(distancedict[k],key=distancedict[k].get)
-...     pointdictmax[max_key] = 2
-...
->>> len(pointdictmax)
-2825
->>> pointdictmin = {}
->>> for k in distancedict.keys():
-...     min_key = min(distancedict[k], key=distancedict[k].get)
-...     pointdictmin[min_key] = 1
+# >>> pointdictmax = {}
+# >>> for k in distancedict.keys():
+# ...     max_key = max(distancedict[k],key=distancedict[k].get)
+# ...     pointdictmax[max_key] = 2
+# ...
+# >>> len(pointdictmax)
+# 2825
+# >>> pointdictmin = {}
+# >>> for k in distancedict.keys():
+# ...     min_key = min(distancedict[k], key=distancedict[k].get)
+# ...     pointdictmin[min_key] = 1
 
-# some keys (objectIds) are the same for min and max (e.g. loops).
->>> dupkeys = [x for x in pointdictmin.keys() if x in pointdictmax.keys()]
->>> dupkeys
-[664, 883, 2333, 2729, 3803, 4521, 5616]
->>> len(dupkeys)
-7
+# # some keys (objectIds) are the same for min and max (e.g. loops).
+# >>> dupkeys = [x for x in pointdictmin.keys() if x in pointdictmax.keys()]
+# >>> dupkeys
+# [664, 883, 2333, 2729, 3803, 4521, 5616]
+# >>> len(dupkeys)
+# 7
 
-with arcpy.da.UpdateCursor("segment_endpoints", ["OJBJECTID", "PointNum"]) as ucursor:
-    loop_processed = []
-    probably_loop = []
-    for urow in ucursor:
-        objid = urow[0]
-        if objid not in pointdict.keys[1]:
-            probably_loop.append(objid)
-            urow[1] = 2
-        elif objid in dupkeys:
-            loop_processed.append(objid)
-            urow[1] = 1
-        else:
-            urow[1] = pointdict[objid]
-        ucursor.updateRow(urow)
+# with arcpy.da.UpdateCursor("segment_endpoints", ["OJBJECTID", "PointNum"]) as ucursor:
+#     loop_processed = []
+#     probably_loop = []
+#     for urow in ucursor:
+#         objid = urow[0]
+#         if objid not in pointdict.keys[1]:
+#             probably_loop.append(objid)
+#             urow[1] = 2
+#         elif objid in dupkeys:
+#             loop_processed.append(objid)
+#             urow[1] = 1
+#         else:
+#             urow[1] = pointdict[objid]
+#         ucursor.updateRow(urow)
 
 
 if __name__ == "__main__":
-    dateprocessed = "20190628"
-    main(dateprocessed)
+    dateprocessed = "20191219"
+    # main(dateprocessed)
+    participant_segments, completed_audit_route_fcs, idsForManualFixes, geocodesCEC = main(dateprocessed)
+    fcsprocessed = [int(arcpy.GetCount_management(fc).getOutput(0)) for fc in completed_audit_route_fcs]
+    output_semiFinal = "GoogleAuditSegRoutes_NearFinal_{}".format(sum(fcsprocessed))
+    arcpy.Merge_management(completed_audit_route_fcs, output_semiFinal)
+
+    #TODO incorporate into overall process
+    ##############################################
+    ### MIDPOINT INDICATORS FOR SIDE OF STREET ###
+    ##############################################
+    # https://gis.stackexchange.com/questions/189902/determining-whether-point-is-on-left-or-right-side-of-road-using-arcpy
+    createSideOfStreetIndicators(geocodesCEC, participant_segments)
+    # Check extension back in
+    arcpy.CheckInExtension("network")
 
 
-# Check extension back in
-arcpy.CheckInExtension("network")
+    # Potential user inputs:
+    # maximum distance for route
+    #    -- e.g. 400m = 400
+    # network dataset with underlying streets
+    #    -- e.g. StreetMap Premium xxxx Release x
+    # desired travel mode on the network dataset
+    #    -- defined on the network dataset, e.g. "Walking Distance"
+    # destinations for route (CSV)
+    #    -- e.g. supermarkets
+    #    -- May need to specify spatial reference for these too
+    # point data (CSV) for participants
+    # spatial reference for original point data
+    #    -- e.g. WGS84
+    # spatial reference used for standardized audit route length measure
+    #    -- e.g. US Contiguous Equidistant Conic
 
 
-def getfieldnames(fc):
-    fieldlist = [field.name for field in arcpy.ListFields(fc)]
-    return fieldlist
 
-redcapdict = dict()
-arcpy.env.workspace = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\intermediate-output\googleaudit_20190628.gdb\Final_audit_layers"
+# def getfieldnames(fc):
+#     fieldlist = [field.name for field in arcpy.ListFields(fc)]
+#     return fieldlist
 
-fcs = arcpy.ListFeatureClasses("*_sorted")
+# redcapdict = dict()
+# arcpy.env.workspace = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\intermediate-output\googleaudit_20190628.gdb\Final_audit_layers"
 
-with arcpy.da.SearchCursor("streetside_indicators_2828_sorted2", ["kmzid", "auditgr", "process_rca"]) as cursor:
-    for row in cursor:
-        k = row[0]
-        auditgr = row[1]
-        rcaAudit = row[2]
-        redcapdict[k] = dict()
-        redcapdict[k]["auditgr"] = auditgr
-        redcapdict[k]["process_rca"] = rcaAudit
+# fcs = arcpy.ListFeatureClasses("*_sorted")
 
-with arcpy.da.SearchCursor("segment_endpoints_2828_sorted2", ["kmzid", "auditgr", "process_rca"]) as cursor:
-    # verify auditgroup and kmzid
-    for row in cursor:
-        k = int(row[0])
-        auditgr = row[1]
-        rcaAudit = row[2]
-        # check auditgroup
-        auditgr_test = redcapdict[k]["auditgr"]
-        rcaAudit_test = redcapdict[k]["process_rca"]
-        if (auditgr_test != auditgr) or (rcaAudit_test != rcaAudit):
-            print(k, rcaAudit_test == rcaAudit, auditgr_test == auditgr)
+# with arcpy.da.SearchCursor("streetside_indicators_2828_sorted2", ["kmzid", "auditgr", "process_rca"]) as cursor:
+#     for row in cursor:
+#         k = row[0]
+#         auditgr = row[1]
+#         rcaAudit = row[2]
+#         redcapdict[k] = dict()
+#         redcapdict[k]["auditgr"] = auditgr
+#         redcapdict[k]["process_rca"] = rcaAudit
 
-
-with arcpy.da.SearchCursor("street_segments_2828_sorted2", ["kmzid", "auditgr", "process_rca", "oddRoute", "loopedSeg", "twoDests", "Shape_Length"]) as cursor:
-    for row in cursor:
-        k = int(row[0])
-        auditgr = row[1]
-        rcaAudit = row[2]
-        # check auditgroup
-        auditgr_test = redcapdict[k]["auditgr"]
-        rcaAudit_test = redcapdict[k]["process_rca"]
-        # verify auditgroup and kmzid
-        if (auditgr_test != auditgr) or (rcaAudit_test != rcaAudit):
-            print(k, rcaAudit_test == rcaAudit, auditgr_test == auditgr)
-            # TODO raise an error
-        oddRouteFlag = row[3]
-        loopFlag = row[4]
-        twoDestsFlag = row[5]
-        segLength = round(row[6], 2)
-        redcapdict[k]["oddRoute"] = oddRouteFlag
-        redcapdict[k]["loopedSeg"] = loopFlag
-        redcapdict[k]["twoDests"] = twoDestsFlag
-        redcapdict[k]["Segment_Length"] = segLength
+# with arcpy.da.SearchCursor("segment_endpoints_2828_sorted2", ["kmzid", "auditgr", "process_rca"]) as cursor:
+#     # verify auditgroup and kmzid
+#     for row in cursor:
+#         k = int(row[0])
+#         auditgr = row[1]
+#         rcaAudit = row[2]
+#         # check auditgroup
+#         auditgr_test = redcapdict[k]["auditgr"]
+#         rcaAudit_test = redcapdict[k]["process_rca"]
+#         if (auditgr_test != auditgr) or (rcaAudit_test != rcaAudit):
+#             print(k, rcaAudit_test == rcaAudit, auditgr_test == auditgr)
 
 
-with arcpy.da.SearchCursor("audit_routes_2828_sorted2", ["kmzid", "auditgr", "process_rca", "oddRoute", "loopedSeg", "twoDests", "Shape_Length"]) as cursor:
-    for row in cursor:
-        k = int(row[0])
-        auditgr = row[1]
-        rcaAudit = row[2]
-        # check auditgroup
-        auditgr_test = redcapdict[k]["auditgr"]
-        rcaAudit_test = redcapdict[k]["process_rca"]
-        # verify auditgroup and kmzid
-        if (auditgr_test != auditgr) or (rcaAudit_test != rcaAudit):
-            print(k, rcaAudit_test == rcaAudit, auditgr_test == auditgr)
-            # TODO raise an error
-        oddRouteFlag = row[3]
-        loopFlag = row[4]
-        twoDestsFlag = row[5]
-        routeLength = round(row[6], 2)
-        if redcapdict[k]["oddRoute"] != oddRouteFlag:
-            print("oddroute difference: {}".format(k))
-        if redcapdict[k]["loopedSeg"] != loopFlag:
-            print("loopedseg difference: {}".format(k))
-        if redcapdict[k]["twoDests"] != twoDestsFlag:
-            print("twodests difference: {}".format(format(k)))
-        redcapdict[k]["Route_Length"] = routeLength
+# with arcpy.da.SearchCursor("street_segments_2828_sorted2", ["kmzid", "auditgr", "process_rca", "oddRoute", "loopedSeg", "twoDests", "Shape_Length"]) as cursor:
+#     for row in cursor:
+#         k = int(row[0])
+#         auditgr = row[1]
+#         rcaAudit = row[2]
+#         # check auditgroup
+#         auditgr_test = redcapdict[k]["auditgr"]
+#         rcaAudit_test = redcapdict[k]["process_rca"]
+#         # verify auditgroup and kmzid
+#         if (auditgr_test != auditgr) or (rcaAudit_test != rcaAudit):
+#             print(k, rcaAudit_test == rcaAudit, auditgr_test == auditgr)
+#             # TODO raise an error
+#         oddRouteFlag = row[3]
+#         loopFlag = row[4]
+#         twoDestsFlag = row[5]
+#         segLength = round(row[6], 2)
+#         redcapdict[k]["oddRoute"] = oddRouteFlag
+#         redcapdict[k]["loopedSeg"] = loopFlag
+#         redcapdict[k]["twoDests"] = twoDestsFlag
+#         redcapdict[k]["Segment_Length"] = segLength
 
 
-import csv
+# with arcpy.da.SearchCursor("audit_routes_2828_sorted2", ["kmzid", "auditgr", "process_rca", "oddRoute", "loopedSeg", "twoDests", "Shape_Length"]) as cursor:
+#     for row in cursor:
+#         k = int(row[0])
+#         auditgr = row[1]
+#         rcaAudit = row[2]
+#         # check auditgroup
+#         auditgr_test = redcapdict[k]["auditgr"]
+#         rcaAudit_test = redcapdict[k]["process_rca"]
+#         # verify auditgroup and kmzid
+#         if (auditgr_test != auditgr) or (rcaAudit_test != rcaAudit):
+#             print(k, rcaAudit_test == rcaAudit, auditgr_test == auditgr)
+#             # TODO raise an error
+#         oddRouteFlag = row[3]
+#         loopFlag = row[4]
+#         twoDestsFlag = row[5]
+#         routeLength = round(row[6], 2)
+#         if redcapdict[k]["oddRoute"] != oddRouteFlag:
+#             print("oddroute difference: {}".format(k))
+#         if redcapdict[k]["loopedSeg"] != loopFlag:
+#             print("loopedseg difference: {}".format(k))
+#         if redcapdict[k]["twoDests"] != twoDestsFlag:
+#             print("twodests difference: {}".format(format(k)))
+#         redcapdict[k]["Route_Length"] = routeLength
+
+
+# import csv
 
 # https://stackoverflow.com/questions/29400631/python-writing-nested-dictionary-to-csv
-def mergedict(a,b):
-    a.update(b)
-    return a
+# def mergedict(a,b):
+#     a.update(b)
+#     return a
 
 
-folder = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\RedCapUpload"
-csv_columns = ["kmzid"] + list(outputdict[list(outputdict.keys())[0]].keys())
-csv_file = os.path.join(folder, "IndicatorsForRedCapUpload_GoogleAudit_REGARDSBSE_2019.07.11_v1.csv")
-with open(csv_file, 'w') as csvfile:
-    writer = csv.DictWriter(csvfile, fieldnames=csv_columns, delimiter=',', lineterminator='\n')
-    writer.writeheader()
-    for k,d in sorted(outputdict.items()):
-        writer.writerow(mergedict({'kmzid': k},d))
-
-
-
+# folder = r"M:\EPL-GEO_BSERE\Data\WorkingData\google.audit\RedCapUpload"
+# csv_columns = ["kmzid"] + list(outputdict[list(outputdict.keys())[0]].keys())
+# csv_file = os.path.join(folder, "IndicatorsForRedCapUpload_GoogleAudit_REGARDSBSE_2019.07.11_v1.csv")
+# with open(csv_file, 'w') as csvfile:
+#     writer = csv.DictWriter(csvfile, fieldnames=csv_columns, delimiter=',', lineterminator='\n')
+#     writer.writeheader()
+#     for k,d in sorted(outputdict.items()):
+#         writer.writerow(mergedict({'kmzid': k},d))
 
 
 
-with arcpy.da.SearchCursor("auditGroupUpdate", ["kmzid", "caresaudit", "process_rca", "auditgr", "regardsaudit"]) as cursor:
-...     for row in cursor:
-...         k = row[0]
-...         outputdict[k] = dict()
-...         outputdict[k]["caresaudit"] = row[1]
-...         outputdict[k]["process_rca"] = row[2]
-...         outputdict[k]["auditgr"] = row[3]
-...         outputdict[k]["regardsaudit"] = row[4]
 
 
 
-with arcpy.da.SearchCursor("Audit Routes", ["kmzidINT", "Shape_Length", "oddRoute", "auditgr", "loopedSeg", "process_rca"]) as cursor:
-    for row in cursor:
-        k = row[0]
-        outputdict[k]["loopedSeg"] = row[4]
-        outputdict[k]["oddRoute"] = row[2]
-        outputdict[k]["RouteLength"] = row[1]
-        testrca = row[5] == outputdict[k]["process_rca"]
-        testgroup = row[3] == outputdict[k]["auditgr"]
-        if testrca is False:
-            print("processRCA problem on {}".format(k))
-        if testgroup is False:
-            print("auditgroup problem on {}".format(k))
+# with arcpy.da.SearchCursor("auditGroupUpdate", ["kmzid", "caresaudit", "process_rca", "auditgr", "regardsaudit"]) as cursor:
+# ...     for row in cursor:
+# ...         k = row[0]
+# ...         outputdict[k] = dict()
+# ...         outputdict[k]["caresaudit"] = row[1]
+# ...         outputdict[k]["process_rca"] = row[2]
+# ...         outputdict[k]["auditgr"] = row[3]
+# ...         outputdict[k]["regardsaudit"] = row[4]
 
 
-with arcpy.da.SearchCursor("Street Segments", ["kmzidINT", "Shape_Length","auditgr"]) as cursor:
-    for row in cursor:
-        k = row[0]
-        outputdict[k]["SegmentLength"] = row[1]
-        testgroup = row[2] == outputdict[k]["auditgr"]
-        if testgroup is False:
-            print("auditgroup problem on {}".format(k))
+
+# with arcpy.da.SearchCursor("Audit Routes", ["kmzidINT", "Shape_Length", "oddRoute", "auditgr", "loopedSeg", "process_rca"]) as cursor:
+#     for row in cursor:
+#         k = row[0]
+#         outputdict[k]["loopedSeg"] = row[4]
+#         outputdict[k]["oddRoute"] = row[2]
+#         outputdict[k]["RouteLength"] = row[1]
+#         testrca = row[5] == outputdict[k]["process_rca"]
+#         testgroup = row[3] == outputdict[k]["auditgr"]
+#         if testrca is False:
+#             print("processRCA problem on {}".format(k))
+#         if testgroup is False:
+#             print("auditgroup problem on {}".format(k))
+
+
+# with arcpy.da.SearchCursor("Street Segments", ["kmzidINT", "Shape_Length","auditgr"]) as cursor:
+#     for row in cursor:
+#         k = row[0]
+#         outputdict[k]["SegmentLength"] = row[1]
+#         testgroup = row[2] == outputdict[k]["auditgr"]
+#         if testgroup is False:
+#             print("auditgroup problem on {}".format(k))
 
 
 
